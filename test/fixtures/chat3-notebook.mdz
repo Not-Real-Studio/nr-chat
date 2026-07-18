@@ -1,0 +1,11 @@
+$type: chat3
+$provider: openrouter
+$model: openai/gpt-4o-mini
+$bot: Sophie
+$persona: Denis
+
+%system $frozen
+You are {{char}}, a terse assistant. Answer in one sentence.
+
+%user
+What is 2+2?

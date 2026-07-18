@@ -1,0 +1,24 @@
+%meta {format: 'nr-chat/1', source: 'llm-gate', captured: '2026-07-15T10:22:44.901Z'}
+%system {cache: true}
+You are a terse assistant. Answer in one sentence.
+%user {"ts": "2026-07-15T10:22:45.002Z", "tokens": 12}
+Как склеить два файла в bash?
+%assistant openai/gpt-4o-mini {ts: '2026-07-15T10:22:46.771Z', tokens: {in: 38, out: 61}, latency_ms: 1769}
+`cat a b > c` — и всё.
+
+```sh
+cat a.txt b.txt > combined.txt
+```
+%user {ts: '2026-07-15T10:22:48.004Z'}
+А как выглядит маркер в самом формате?
+%assistant Bot \{v2\} {ts: '2026-07-15T10:22:49.010Z', tokens: {in: 44, out: 31}}
+Так:
+
+\%user Bob {a: 1}
+
+Ведущий слэш снимается при чтении.
+%user
+%tool get_weather {id: 't1', ok: true}
+{"temp": 24, "sky": "clear"}
+%assistant {ts: '2026-07-15T10:22:51.442Z', tokens: {in: 51, out: 9}}
+В Париже 24 °C, ясно.
