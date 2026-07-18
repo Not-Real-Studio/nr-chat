@@ -110,8 +110,16 @@ function escapeName(name: string): string {
   return out
 }
 
-/** Add one rung to the ladder: `%…` → `\%…`, `\%…` → `\\%…`, and so on. */
-function escapeBody(body: string): string {
+/**
+ * Add one rung to the escape ladder: `%…` → `\%…`, `\%…` → `\\%…`, and so on.
+ *
+ * The single escape engine for message bodies. `stringify` uses it internally;
+ * it is also exported so input paths that inject raw text as a body — the
+ * runner's `::quote` directive, an editor "paste as quote" snippet — escape by
+ * the same rule instead of re-deriving it. Idempotent only up the ladder: each
+ * pass adds one rung, so escape once per level of literal-ness intended.
+ */
+export function escapeBody(body: string): string {
   return body
     .split('\n')
     .map((line) => (RE_BODY_NEEDS_ESCAPE.test(line) ? '\\' + line : line))
