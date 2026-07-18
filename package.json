@@ -1,0 +1,58 @@
+{
+  "name": "@notreal/nr-chat",
+  "version": "0.1.1",
+  "description": "Atomic %role + JSON5 chat format: zero-dependency parser, canonical emitter, byte-exact in-place editing. Runs in Node, browsers, GAS and userscripts.",
+  "keywords": [
+    "chat",
+    "chat-format",
+    "json5",
+    "llm",
+    "transcript",
+    "conversation",
+    "parser",
+    "serializer",
+    "zero-dependency",
+    "append-only",
+    "streaming"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "publishConfig": {
+    "registry": "http://git.nr/api/packages/denis/npm/"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./global": "./dist/nr-chat.global.js"
+  },
+  "unpkg": "./dist/nr-chat.global.js",
+  "jsdelivr": "./dist/nr-chat.global.js",
+  "scripts": {
+    "build": "tsc && node build/global.mjs",
+    "test": "vitest run",
+    "pretest": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "author": "Julian Garrett",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Not-Real-Studio/nr-chat.git"
+  },
+  "homepage": "https://github.com/Not-Real-Studio/nr-chat#readme",
+  "bugs": {
+    "url": "https://github.com/Not-Real-Studio/nr-chat/issues"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts"
+}
