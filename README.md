@@ -18,11 +18,11 @@ The library has no dependencies at all: the JSON5 reader is inside the source, n
 ## Install
 
 ```sh
-npm install @notreal/nr-chat
+npm install @notrealstudio/nr-chat
 ```
 
 ```js
-import { parse, stringify } from '@notreal/nr-chat'
+import { parse, stringify } from '@notrealstudio/nr-chat'
 
 const messages = parse(text)   // -> [{ role, name?, meta?, body }]
 const text = stringify(messages)
