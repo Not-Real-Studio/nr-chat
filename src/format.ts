@@ -138,7 +138,12 @@ function scanMarkers(text: string): Marker[] {
   while (pos < text.length) {
     const nl = text.indexOf('\n', pos)
     const lineEnd = nl === -1 ? text.length : nl
-    if (text[pos] === '%') {
+    // A marker requires a non-empty role token right after '%': a bare '%'
+    // (or '% ...') line is ordinary content, not a role-less marker. This
+    // keeps parse<->stringify total: stringify rejects empty roles, so no
+    // parse result may contain one. The escape ladder still covers such
+    // lines on write, so round-trip is unaffected.
+    if (text[pos] === '%' && pos + 1 < lineEnd && /\S/.test(text[pos + 1])) {
       markers.push({ start: pos, lineEnd, line })
     }
     if (nl === -1) break

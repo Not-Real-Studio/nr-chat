@@ -26,8 +26,12 @@ describe('marker line', () => {
     expect(() => parse('%user {a: 1} {b: 2}')).toThrow(/invalid meta/)
   })
 
-  test('a bare % is a role-less marker, not a crash', () => {
-    expect(parse('%')).toEqual([{ role: '', body: '' }])
+  test('a bare % is not a marker: empty roles cannot be parsed into existence', () => {
+    // stringify rejects empty roles, so parse must never produce one --
+    // a bare % (alone or before whitespace) is content, not a marker.
+    expect(parse('%')).toEqual([])
+    expect(parse('% not a role')).toEqual([])
+    expect(parse('%user\n%\n% still body')).toEqual([{ role: 'user', body: '%\n% still body' }])
   })
 
   test('% only counts at the start of a line', () => {
