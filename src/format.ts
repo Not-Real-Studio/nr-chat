@@ -111,6 +111,90 @@ function escapeName(name: string): string {
 }
 
 /**
+ * Fence zones — structural opacity for a guest sitting inside a body.
+ *
+ * A line of four or more backticks opens a zone; a line of at least as many,
+ * and nothing else, closes it. What lies between is opaque in both directions:
+ * markers are not scanned there and the escape ladder does not apply. That is
+ * what lets a whole chat be quoted inside another one without its `%` lines
+ * splitting the host message.
+ *
+ * Four, not three, is the minimum: ``` fences are ordinary markdown inside
+ * bodies today, and taking them would reinterpret a great deal of existing
+ * text. The price is that a `%` line inside a ``` block still needs the escape
+ * ladder — whoever wants opacity takes four.
+ */
+
+/** Opener: the backtick run, then an info-string that may not hold a backtick. */
+const RE_FENCE_OPENER = /^(`{4,})[^`]*$/
+/** Closer: backticks and nothing else, bar trailing whitespace (a CR included). */
+const RE_FENCE_CLOSER = /^(`{4,})[ \t\r]*$/
+
+interface SourceLine {
+  text: string
+  /** Offset of the line's first byte in the text it was split from. */
+  start: number
+}
+
+/** Split on `\n` keeping offsets; element-wise identical to `text.split('\n')`. */
+function splitLines(text: string): SourceLine[] {
+  const lines: SourceLine[] = []
+  let pos = 0
+
+  for (;;) {
+    const nl = text.indexOf('\n', pos)
+    if (nl === -1) {
+      lines.push({ text: text.slice(pos), start: pos })
+      return lines
+    }
+    lines.push({ text: text.slice(pos, nl), start: pos })
+    pos = nl + 1
+  }
+}
+
+/**
+ * Which lines belong to a fence zone — opener and closer included, since
+ * neither could be a marker or need an escape anyway, so one mask serves the
+ * marker scan and both escape paths. `null` when the text holds no zone, which
+ * is the common case and lets callers skip the lookup altogether.
+ *
+ * An opener with no closer before the end of the text is not a zone: it stays
+ * ordinary text and scanning resumes on the very next line, so a shorter fence
+ * further down can still open one. This is a deliberate departure from
+ * CommonMark, where an unclosed fence runs to the end of the document — here a
+ * stray ```` in quoted text would then swallow every message after it, whereas
+ * degrading to plain text is exactly the behaviour of a reader with no zones.
+ *
+ * There is no recursion: the first fence long enough closes the zone. Nesting
+ * is a convention — the host takes a longer fence than its guest's longest —
+ * and a hand-made mistake costs a torn message, never a document eaten to EOF.
+ */
+function zoneLines(lines: SourceLine[]): boolean[] | null {
+  let mask: boolean[] | null = null
+
+  for (let i = 0; i < lines.length; i++) {
+    const opener = RE_FENCE_OPENER.exec(lines[i].text)
+    if (!opener) continue
+
+    let close = -1
+    for (let j = i + 1; j < lines.length; j++) {
+      const closer = RE_FENCE_CLOSER.exec(lines[j].text)
+      if (closer && closer[1].length >= opener[1].length) {
+        close = j
+        break
+      }
+    }
+    if (close === -1) continue
+
+    mask ??= new Array<boolean>(lines.length).fill(false)
+    for (let k = i; k <= close; k++) mask[k] = true
+    i = close
+  }
+
+  return mask
+}
+
+/**
  * Add one rung to the escape ladder: `%…` → `\%…`, `\%…` → `\\%…`, and so on.
  *
  * The single escape engine for message bodies. `stringify` uses it internally;
@@ -118,11 +202,16 @@ function escapeName(name: string): string {
  * runner's `::quote` directive, an editor "paste as quote" snippet — escape by
  * the same rule instead of re-deriving it. Idempotent only up the ladder: each
  * pass adds one rung, so escape once per level of literal-ness intended.
+ *
+ * Zone-aware: lines inside a fence zone are left exactly as they are, which is
+ * the write half of the opacity `parse` gives on read.
  */
 export function escapeBody(body: string): string {
-  return body
-    .split('\n')
-    .map((line) => (RE_BODY_NEEDS_ESCAPE.test(line) ? '\\' + line : line))
+  const lines = splitLines(body)
+  const inZone = zoneLines(lines)
+
+  return lines
+    .map(({ text }, i) => (!inZone?.[i] && RE_BODY_NEEDS_ESCAPE.test(text) ? '\\' + text : text))
     .join('\n')
 }
 
@@ -132,6 +221,24 @@ function unescapeBodyLine(line: string): string {
   return RE_BODY_IS_ESCAPED.test(bare) ? bare.slice(1) : bare
 }
 
+/**
+ * The read half: unescape line by line, but leave a zone's lines alone.
+ *
+ * CRLF still normalizes inside a zone. Opacity is about markers and escapes;
+ * "a body never holds a stray CR" is a document-level rule of the format, and
+ * surgery, not the codec, is the path that keeps a file's bytes exactly.
+ */
+function unescapeBody(bodyRaw: string): string {
+  const lines = splitLines(bodyRaw)
+  const inZone = zoneLines(lines)
+
+  return lines
+    .map(({ text }, i) =>
+      inZone?.[i] ? (text.endsWith('\r') ? text.slice(0, -1) : text) : unescapeBodyLine(text),
+    )
+    .join('\n')
+}
+
 interface Marker {
   start: number
   lineEnd: number
@@ -139,24 +246,25 @@ interface Marker {
 }
 
 function scanMarkers(text: string): Marker[] {
+  const lines = splitLines(text)
+  const inZone = zoneLines(lines)
   const markers: Marker[] = []
-  let pos = 0
-  let line = 1
 
-  while (pos < text.length) {
-    const nl = text.indexOf('\n', pos)
-    const lineEnd = nl === -1 ? text.length : nl
+  for (let i = 0; i < lines.length; i++) {
+    // Inside a zone nothing opens a message: that is the whole of the guest's
+    // protection, and it is why a zone opened in one body and closed past what
+    // would otherwise be the next marker simply makes that marker not exist.
+    if (inZone?.[i]) continue
+
+    const { text: line, start } = lines[i]
     // A marker requires a non-empty role token right after '%': a bare '%'
     // (or '% ...') line is ordinary content, not a role-less marker. This
     // keeps parse<->stringify total: stringify rejects empty roles, so no
     // parse result may contain one. The escape ladder still covers such
     // lines on write, so round-trip is unaffected.
-    if (text[pos] === '%' && pos + 1 < lineEnd && /\S/.test(text[pos + 1])) {
-      markers.push({ start: pos, lineEnd, line })
+    if (line[0] === '%' && line.length > 1 && /\S/.test(line[1])) {
+      markers.push({ start, lineEnd: start + line.length, line: i + 1 })
     }
-    if (nl === -1) break
-    pos = nl + 1
-    line++
   }
 
   return markers
@@ -170,6 +278,10 @@ export function parse(text: string, options?: ParseOptions): ChatMessage[]
  * Parse a chat stream. Anything before the first marker is ignored — log
  * preambles and mdz headers live there. CRLF is normalized to LF; use
  * `replaceSpan` when the file's bytes must survive untouched.
+ *
+ * A fence zone (a line of 4+ backticks, closed by one of at least as many) is
+ * opaque: no marker is read inside it and no escape is removed, so quoted
+ * chats and other guests come through whole.
  *
  * @throws {SyntaxError} with `lineNumber` when a marker's meta is not valid JSON5.
  */
@@ -206,7 +318,10 @@ export function parse(text: string, options: ParseOptions = {}): ChatMessage[] {
     const markerLine = rawMarkerLine.endsWith('\r') ? rawMarkerLine.slice(0, -1) : rawMarkerLine
 
     const bodyRaw = firstNl === -1 ? '' : messageText.slice(firstNl + 1)
-    const body = bodyRaw.split('\n').map(unescapeBodyLine).join('\n')
+    // Zones are scanned per body, which agrees with the document-wide scan: a
+    // body always ends at or after the closer of any zone opened inside it,
+    // and no zone can be open across a marker, or that marker would not exist.
+    const body = unescapeBody(bodyRaw)
 
     const afterPercent = markerLine.slice(1)
     const role = RE_ROLE.exec(afterPercent)![0]
