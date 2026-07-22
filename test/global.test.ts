@@ -38,7 +38,14 @@ describe('dist/nr-chat.global.js', () => {
   test('exposes exactly the public surface, and no JSON5 global', () => {
     const NrChat = loadGlobal()
 
-    expect(Object.keys(NrChat).sort()).toEqual(['parse', 'parseJson5', 'replaceSpan', 'stringify', 'stringifyJson5'])
+    expect(Object.keys(NrChat).sort()).toEqual([
+      'escapeBody',
+      'parse',
+      'parseJson5',
+      'replaceSpan',
+      'stringify',
+      'stringifyJson5',
+    ])
     for (const name of Object.keys(NrChat)) {
       expect(NrChat[name]).toBeTypeOf('function')
     }
