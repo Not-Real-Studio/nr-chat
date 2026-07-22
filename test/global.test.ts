@@ -40,6 +40,7 @@ describe('dist/nr-chat.global.js', () => {
 
     expect(Object.keys(NrChat).sort()).toEqual([
       'escapeBody',
+      'fenceFor',
       'parse',
       'parseJson5',
       'replaceSpan',

@@ -195,6 +195,29 @@ function zoneLines(lines: SourceLine[]): boolean[] | null {
 }
 
 /**
+ * The fence to wrap `guest` in: one backtick more than the longest run of
+ * backticks anywhere inside it, and never fewer than the four a zone takes.
+ *
+ * The count is deliberately blind to the grammar. A run in the middle of a
+ * line, an indented one, the stray half of a fence someone's copy-paste cut in
+ * two — all of them count. A wrapper's job is to survive a malformed guest, and
+ * over-counting costs one backtick where under-counting costs an early closer
+ * and a torn message.
+ *
+ * This is the writer's half of the nesting convention: the host takes N+1 when
+ * the guest's longest run is N, and whatever builds the wrapper counts it, so
+ * that nobody has to count backticks by eye.
+ *
+ * ```js
+ * const body = fenceFor(guest) + '\n' + guest + '\n' + fenceFor(guest)
+ * ```
+ */
+export function fenceFor(guest: string): string {
+  const longest = (guest.match(/`+/g) ?? []).reduce((max, run) => Math.max(max, run.length), 0)
+  return '`'.repeat(Math.max(longest + 1, 4))
+}
+
+/**
  * Add one rung to the escape ladder: `%…` → `\%…`, `\%…` → `\\%…`, and so on.
  *
  * The single escape engine for message bodies. `stringify` uses it internally;

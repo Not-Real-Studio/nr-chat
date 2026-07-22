@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 
-import { escapeBody, parse, stringify, type ChatMessage } from '../src/index.js'
+import { escapeBody, fenceFor, parse, stringify, type ChatMessage } from '../src/index.js'
 
 const F4 = '````'
 const F5 = '`````'
@@ -223,6 +223,103 @@ describe('round-trip', () => {
     expect(parse(stringify(messages))).toEqual(messages)
     // And the guest still parses on its own once unwrapped.
     expect(parse(inner)).toHaveLength(2)
+  })
+})
+
+describe('fenceFor', () => {
+  test('a guest with no backticks at all takes the minimum four', () => {
+    expect(fenceFor('')).toBe(F4)
+    expect(fenceFor('%user\nhello, no fences here\n')).toBe(F4)
+  })
+
+  test('runs shorter than the minimum do not push it up', () => {
+    expect(fenceFor('a `code` span')).toBe(F4)
+    expect(fenceFor(['%user', '```js', 'let a = 1', '```'].join('\n'))).toBe(F4)
+  })
+
+  test('a guest fenced with four takes five', () => {
+    expect(fenceFor(['%user', F4, '%quoted', F4].join('\n'))).toBe(F5)
+  })
+
+  test.each([4, 5, 6, 12])('a guest whose longest run is %i takes one more', (n) => {
+    const run = '`'.repeat(n)
+    expect(fenceFor(['%user', run + 'text', 'body', run].join('\n'))).toBe('`'.repeat(n + 1))
+  })
+
+  test('the longest run wins, not the last one', () => {
+    expect(fenceFor([F5, F4, 'guest', F4, F5].join('\n'))).toBe('`'.repeat(6))
+  })
+
+  test('counting is blind to the grammar: broken and indented runs count too', () => {
+    // None of these is an opener or a closer by §2, and that is exactly why
+    // they are counted — a wrapper has to survive a mangled guest.
+    expect(fenceFor('   ' + F5)).toBe('`'.repeat(6)) // indented
+    expect(fenceFor('see ' + F5 + ' here')).toBe('`'.repeat(6)) // mid-line
+    expect(fenceFor(F5 + 'a`b')).toBe('`'.repeat(6)) // info-string with a backtick
+    expect(fenceFor('%user\n' + F5)).toBe('`'.repeat(6)) // opener with no closer
+    expect(fenceFor(F5 + '\ntail cut off')).toBe('`'.repeat(6))
+  })
+
+  test('the fence it hands back really is long enough to be a zone', () => {
+    const guest = [F4, 'a', F5, 'b'].join('\n')
+    const fence = fenceFor(guest)
+
+    expect(fence.length).toBeGreaterThanOrEqual(4)
+    expect(parse(['%user', fence, guest, fence, ''].join('\n')).map((m) => m.role)).toEqual(['user'])
+  })
+})
+
+describe('fenceFor round-trip: the ::quote path', () => {
+  /** What an input path injecting raw text as a body does. */
+  const wrap = (guest: string): string => {
+    const fence = fenceFor(guest)
+    return fence + '\n' + guest + '\n' + fence
+  }
+
+  /** The guest back out of a wrapped body: everything between the two fences. */
+  const unwrap = (body: string): string => {
+    const lines = body.split('\n')
+    return lines.slice(1, -1).join('\n')
+  }
+
+  const GUESTS = [
+    '%system\nyou are terse\n%user\nhi',
+    ['%user', 'a capture with its own zone:', F4, '%system', 'nested', F4].join('\n'),
+    ['%user', 'and its own escape ladder:', '\\%user', '\\\\%user'].join('\n'),
+    ['%user', F5, F4, 'two levels deep', F4, F5].join('\n'),
+    'no markers, just ``` markdown ```',
+    ['%user', 'a torn fence, no closer:', F4].join('\n'),
+    '',
+  ]
+
+  test.each(GUESTS.map((g) => [g] as const))('the guest comes back verbatim: %j', (guest) => {
+    const messages: ChatMessage[] = [
+      { role: 'user', body: wrap(guest) },
+      { role: 'assistant', body: 'and my answer' },
+    ]
+    const parsed = parse(stringify(messages))
+
+    expect(parsed).toEqual(messages)
+    expect(unwrap(parsed[0].body)).toBe(guest)
+  })
+
+  test('a guest quoted whole, marker line and meta included', () => {
+    const guest = stringify([
+      { role: 'system', body: 'you are terse' },
+      { role: 'user', name: 'Bob', meta: { ts: 1 }, body: 'hi\n%not-a-marker' },
+    ]).slice(0, -1) // the emitter's trailing newline is the document's, not the guest's
+
+    const parsed = parse(stringify([{ role: 'user', body: wrap(guest) }]))
+
+    expect(unwrap(parsed[0].body)).toBe(guest)
+    expect(parse(guest)).toHaveLength(2)
+  })
+
+  test('CRLF in the guest comes back as LF — the format normalizes, zone or not', () => {
+    const guest = ['%user', 'line', '%assistant', 'other'].join('\r\n')
+    const parsed = parse(stringify([{ role: 'user', body: wrap(guest) }]))
+
+    expect(unwrap(parsed[0].body)).toBe(guest.replace(/\r\n/g, '\n'))
   })
 })
 

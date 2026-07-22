@@ -124,6 +124,15 @@ That is one message whose body is those four lines. It is not a case to work aro
 
 **Nesting is a convention, not a rule the parser enforces.** There is no recursion — the first fence long enough closes the zone. A host wraps a guest in a fence longer than the longest one inside that guest, and whatever writes the wrapper should count that, rather than leaving it to whoever is typing. Get it wrong and you get one torn message; you never get a document eaten to end of file. Past one level of guest, put it in a file and link to it.
 
+`fenceFor` does the counting, so nobody counts backticks by eye:
+
+```js
+const fence = fenceFor(guest)
+const body = fence + '\n' + guest + '\n' + fence
+```
+
+It returns one backtick more than the longest run anywhere in the guest, never fewer than four. The count is blind to the grammar on purpose — an indented run, a run mid-line, the stray half of a fence a copy-paste cut in two all count. A wrapper has to survive a malformed guest, and over-counting costs a backtick where under-counting costs a torn message.
+
 ### The seam
 
 The newline before a marker is a **separator, not content**. It belongs to the document; a body never ends with it:
@@ -229,6 +238,7 @@ parse(text: string, options: { spans: true }): ChatMessageWithSpan[]
 stringify(messages: ChatMessage[]): string
 replaceSpan(text: string, span: Span, replacement: string): string
 escapeBody(body: string): string
+fenceFor(guest: string): string
 
 parseJson5(text: string): unknown
 stringifyJson5(value: unknown): string
@@ -247,7 +257,7 @@ interface Span {
 }
 ```
 
-`escapeBody` adds one rung of the ladder to every line that needs it, skipping fence zones — the same engine `stringify` uses. It is exported for input paths that inject raw text as a body, so a "paste as quote" escapes by this rule instead of re-deriving it.
+`escapeBody` adds one rung of the ladder to every line that needs it, skipping fence zones — the same engine `stringify` uses. It is exported for input paths that inject raw text as a body, so a "paste as quote" escapes by this rule instead of re-deriving it. `fenceFor` is the other half of that path: wrap a guest in the fence it returns and the guest needs no escaping at all — see [Fence zones](#fence-zones).
 
 `parseJson5` and `stringifyJson5` are public in their own right — the library stands in for `json5` where you need it separately. Exports are named, and there is no `JSON5` global, so nothing collides with the real library.
 
