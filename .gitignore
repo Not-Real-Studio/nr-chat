@@ -4,3 +4,4 @@ dist/
 *.log
 .code/.code-tmp/
 .code
+.claude
