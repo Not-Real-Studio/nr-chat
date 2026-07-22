@@ -1,7 +1,7 @@
 {
   "name": "@notrealstudio/nr-chat",
   "version": "0.3.0",
-  "description": "Atomic %role + JSON5 chat format: zero-dependency parser, canonical emitter, byte-exact in-place editing. Runs in Node, browsers, GAS and userscripts.",
+  "description": "Atomic %role + JSON5 chat format: parser, canonical emitter, byte-exact in-place editing. Runs in Node, browsers, GAS and userscripts.",
   "keywords": [
     "chat",
     "chat-format",
@@ -11,7 +11,6 @@
     "conversation",
     "parser",
     "serializer",
-    "zero-dependency",
     "append-only",
     "streaming"
   ],

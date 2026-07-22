@@ -1,6 +1,6 @@
 # nr-chat
 
-A text format for storing and moving chat messages, and a zero-dependency library for it.
+A text format for storing and moving chat messages, and a small library for it.
 
 ```
 %system
@@ -13,7 +13,7 @@ What is 2+2?
 
 One line opens a message, everything until the next line that opens one is its body. That is the whole format. It is append-only, `tail -f`-readable, diffs cleanly, and costs almost nothing in an LLM context window — which is where these files mostly live, so token economy counts as much as legibility.
 
-The library has no dependencies at all: the JSON5 reader is inside the source, not an npm import. It runs in Node, browsers, Google Apps Script, userscripts, and anywhere else with a modern JS engine.
+The library has one dependency, the JSON5 microcodec it needs for message meta ([`@notrealstudio/nr-json5`](https://github.com/Not-Real-Studio/nr-json5), also ours, also zero-dependency). The single-file global build has none — the codec is inlined at build time. It runs in Node, browsers, Google Apps Script, userscripts, and anywhere else with a modern JS engine.
 
 ## Install
 
