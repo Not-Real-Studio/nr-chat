@@ -228,6 +228,7 @@ parse(text: string): ChatMessage[]
 parse(text: string, options: { spans: true }): ChatMessageWithSpan[]
 stringify(messages: ChatMessage[]): string
 replaceSpan(text: string, span: Span, replacement: string): string
+escapeBody(body: string): string
 
 parseJson5(text: string): unknown
 stringifyJson5(value: unknown): string
@@ -245,6 +246,8 @@ interface Span {
   end: number        // end of the last body line, separator excluded
 }
 ```
+
+`escapeBody` adds one rung of the ladder to every line that needs it, skipping fence zones — the same engine `stringify` uses. It is exported for input paths that inject raw text as a body, so a "paste as quote" escapes by this rule instead of re-deriving it.
 
 `parseJson5` and `stringifyJson5` are public in their own right — the library stands in for `json5` where you need it separately. Exports are named, and there is no `JSON5` global, so nothing collides with the real library.
 
