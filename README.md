@@ -87,6 +87,43 @@ A body line that would look like a marker gets one leading backslash; reading re
 
 Only a leading run of backslashes followed by `%` counts. `50% done` is not a marker and is never escaped.
 
+### Fence zones
+
+A body often has to hold a whole other chat: a quoted log, an mds file pasted into a message. Its `%` lines would open messages in the host and tear it apart, so the format gives a guest a place where nothing is read at all:
+
+````text
+%user
+look at this capture:
+`````
+%system
+You are a terse assistant.
+%assistant
+ok
+`````
+Anything odd about it?
+````
+
+A line of **four or more backticks** opens a zone. A line of **at least as many backticks and nothing else** — trailing whitespace aside — closes it. Between the two, text is opaque in both directions: no marker is read there, and no rung of the escape ladder is added or removed. A guest comes back exactly as it went in, its own `\%` lines included.
+
+Four, not three. Triple backticks are ordinary markdown inside bodies and always have been; taking them would re-read a great deal of text that already exists. The price is stated plainly: a `%` line inside a ``` block still needs the escape ladder. Whoever wants opacity takes four.
+
+The info-string after the opening run is free text — a language tag, a note, nothing — and the format does not interpret it. As in CommonMark it may not contain a backtick, so a line with backticks further along is not an opener but plain text.
+
+**An opener with no closer is not a zone.** CommonMark runs an unclosed fence to the end of the document. This format does not: a stray ```` inside quoted text would then swallow every message after it. The line stays ordinary text, reading carries on as though zones did not exist, and a shorter fence below it can still open one. Degrading to exactly what a reader without zones would say is the point.
+
+**A zone may cross what would otherwise be a marker** — and then that marker does not exist:
+
+````text
+%user
+`````
+%assistant
+`````
+````
+
+That is one message whose body is those four lines. It is not a case to work around; it is precisely how a guest is protected.
+
+**Nesting is a convention, not a rule the parser enforces.** There is no recursion — the first fence long enough closes the zone. A host wraps a guest in a fence longer than the longest one inside that guest, and whatever writes the wrapper should count that, rather than leaving it to whoever is typing. Get it wrong and you get one torn message; you never get a document eaten to end of file. Past one level of guest, put it in a file and link to it.
+
 ### The seam
 
 The newline before a marker is a **separator, not content**. It belongs to the document; a body never ends with it:
@@ -120,7 +157,7 @@ Log preambles and mdz headers sit there. `parse` skips them; `stringify` does no
 
 ### Line endings
 
-The reader takes CRLF and gives you LF: a `body` never contains stray carriage returns. The writer emits LF. A CRLF file put through parse → stringify comes back LF — which is a canonicalization, and canonicalizing is exactly what codec mode is allowed to do. When a file's bytes must not move, use surgery.
+The reader takes CRLF and gives you LF: a `body` never contains stray carriage returns — inside a fence zone as well, since a zone is opaque to markers and escapes, not to line endings. The writer emits LF. A CRLF file put through parse → stringify comes back LF — which is a canonicalization, and canonicalizing is exactly what codec mode is allowed to do. When a file's bytes must not move, use surgery.
 
 ## JSON5
 
