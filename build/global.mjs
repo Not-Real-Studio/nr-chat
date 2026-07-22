@@ -2,10 +2,14 @@
  * Build dist/nr-chat.global.js — the single-file `NrChat.*` artifact for GAS,
  * userscripts and anywhere else without module support.
  *
- * No bundler: the library is three files with relative imports, so concatenating
- * them into one IIFE scope resolves every binding. Anything this script does not
- * recognize is a hard error — a silently mis-stripped `export` would ship a
- * broken global.
+ * No bundler: the library is a handful of files with flat imports, so
+ * concatenating them into one IIFE scope resolves every binding. Anything this
+ * script does not recognize is a hard error — a silently mis-stripped `export`
+ * would ship a broken global.
+ *
+ * The JSON5 codec now lives in @notrealstudio/nr-json5, so one of the modules is
+ * read from that package's dist instead of ours. The artifact stays exactly what
+ * it was: self-contained, no module system, no runtime dependency.
  */
 
 import fs from 'node:fs'
@@ -15,20 +19,37 @@ import { fileURLToPath } from 'node:url'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const dist = path.join(root, 'dist')
 
-/** Dependency order: a module may only import from ones already emitted. */
-const MODULES = ['json5.js', 'format.js']
+/**
+ * Dependency order: a module may only import from ones already emitted.
+ * `dir` is where the compiled file lives; `specifier` is how the other modules
+ * import it (a bare package name for the ones we vendor in at build time).
+ */
+const MODULES = [
+  {
+    file: 'json5.js',
+    dir: path.join(root, 'node_modules', '@notrealstudio', 'nr-json5', 'dist'),
+    specifier: '@notrealstudio/nr-json5',
+  },
+  { file: 'format.js', dir: dist, specifier: './format.js' },
+]
 const ENTRY = 'index.js'
 
-const RE_IMPORT = /^import\s*\{([^}]*)\}\s*from\s*'\.\/([\w.-]+)';?\s*$/
-const RE_REEXPORT = /^export\s*\{([^}]*)\}\s*from\s*'\.\/([\w.-]+)';?\s*$/
+const RE_IMPORT = /^import\s*\{([^}]*)\}\s*from\s*'([^']+)';?\s*$/
+const RE_REEXPORT = /^export\s*\{([^}]*)\}\s*from\s*'([^']+)';?\s*$/
 const RE_EXPORT_DECL = /^export\s+(?:async\s+)?(?:function|const|class|let|var)\s+([\w$]+)/
 
 const names = (list) => list.split(',').map((s) => s.trim()).filter(Boolean)
 
-const read = (file) => {
-  const full = path.join(dist, file)
+/** Map an import specifier to the module file it names, or undefined. */
+const moduleFor = (specifier) => {
+  const hit = MODULES.find((m) => m.specifier === specifier || './' + m.file === specifier)
+  return hit?.file
+}
+
+const read = (file, dir = dist) => {
+  const full = path.join(dir, file)
   if (!fs.existsSync(full)) {
-    throw new Error(`build/global: ${full} is missing — run tsc first`)
+    throw new Error(`build/global: ${full} is missing — run tsc (and npm install) first`)
   }
   return fs.readFileSync(full, 'utf8')
 }
@@ -37,15 +58,15 @@ const read = (file) => {
 const declaredBy = new Map()
 const bodies = []
 
-for (const file of MODULES) {
+for (const { file, dir } of MODULES) {
   const out = []
   const declared = new Set()
 
-  for (const line of read(file).split('\n')) {
+  for (const line of read(file, dir).split('\n')) {
     const imported = RE_IMPORT.exec(line)
     if (imported) {
       const [, list, from] = imported
-      const source = declaredBy.get(from)
+      const source = declaredBy.get(moduleFor(from))
       if (!source) {
         throw new Error(`build/global: ${file} imports from ${from}, which is not emitted before it — fix MODULES order`)
       }
@@ -79,6 +100,7 @@ for (const file of MODULES) {
 const publicNames = []
 for (const line of read(ENTRY).split('\n')) {
   if (line.trim() === '') continue
+  if (line.trim().startsWith('//')) continue
 
   const reexport = RE_REEXPORT.exec(line)
   if (!reexport) {
@@ -86,7 +108,7 @@ for (const line of read(ENTRY).split('\n')) {
   }
 
   const [, list, from] = reexport
-  const source = declaredBy.get(from)
+  const source = declaredBy.get(moduleFor(from))
   if (!source) {
     throw new Error(`build/global: ${ENTRY} re-exports from ${from}, which is not in MODULES`)
   }

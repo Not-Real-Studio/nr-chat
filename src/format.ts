@@ -3,7 +3,7 @@
  * one CRUD helper for in-place edits.
  */
 
-import { parseJson5, stringifyJson5 } from './json5.js'
+import { parseJson5, stringifyJson5 } from '@notrealstudio/nr-json5'
 
 /** Byte offsets into the string handed to `parse`. */
 export interface Span {
