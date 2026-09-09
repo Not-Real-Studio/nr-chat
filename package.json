@@ -28,7 +28,8 @@
   "scripts": {
     "build": "tsc && node build/global.mjs",
     "test": "vitest run",
-    "pretest": "npm run build"
+    "pretest": "npm run build",
+    "prepublishOnly": "node -e \"const p=require('./package.json');const bad=Object.entries({...p.dependencies,...p.peerDependencies}).filter(([,v])=>String(v).startsWith('file:'));if(bad.length){console.error('publish blocked: file: deps '+bad.map(([k])=>k).join(', '));process.exit(1)}\""
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
