@@ -5,3 +5,5 @@ dist/
 .code/.code-tmp/
 .code
 .claude
+.claude/
+.code/
