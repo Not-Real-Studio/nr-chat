@@ -167,8 +167,8 @@ describe('opacity in both directions', () => {
     )
   })
 
-  test('escapeBody past an unclosed opener escapes as it always did', () => {
-    expect(escapeBody([F4, '%out'].join('\n'))).toBe([F4, '\\%out'].join('\n'))
+  test('escapeBody past an unclosed opener escapes it too — a dangling fence is text', () => {
+    expect(escapeBody([F4, '%out'].join('\n'))).toBe(['\\' + F4, '\\%out'].join('\n'))
   })
 
   test('a guest keeps its own escape ladder untouched through a round-trip', () => {
@@ -323,13 +323,46 @@ describe('fenceFor round-trip: the ::quote path', () => {
   })
 })
 
-describe('the known limits, stated', () => {
-  test('an unbalanced fence in one body can pair with a line in the next', () => {
-    // stringify has no escape for a backtick line, by design. Two bodies that
-    // each hold half a fence merge on the way back — the nesting convention
-    // (host takes a longer fence) is what avoids this, not the parser.
+describe('unbalanced fences across bodies (was a known limit until 04.10.2026)', () => {
+  test('two bodies that each hold half a fence stay two messages', () => {
+    // Foreign text (exported chats about mds itself) does not follow the nesting
+    // convention, so the writer escapes any fence line outside a zone of its own
+    // body — the same ladder `%` lines take.
     const messages: ChatMessage[] = [{ role: 'user', body: F4 }, { role: 'assistant', body: F4 }]
 
-    expect(parse(stringify(messages))).toEqual([{ role: 'user', body: [F4, '%assistant', F4].join('\n') }])
+    expect(parse(stringify(messages))).toEqual(messages)
+  })
+
+  test('a hand-written unbalanced file still pairs on read — the parser does not guess', () => {
+    expect(parse(['%user', F4, '%assistant', F4].join('\n'))).toEqual([
+      { role: 'user', body: [F4, '%assistant', F4].join('\n') },
+    ])
+  })
+})
+
+describe('fence lines outside a zone take the escape ladder', () => {
+  test('an unclosed opener in one body does not pair with a fence in a later body', () => {
+    const msgs = [
+      { role: 'user', body: 'look:\n````%thinking\nhalf a fence, never closed' },
+      { role: 'assistant', body: 'reply' },
+      { role: 'user', body: 'later\n````\nstray closer' },
+      { role: 'assistant', body: 'end' },
+    ]
+    const text = stringify(msgs)
+    expect(text).toContain('\n\\````%thinking\n')
+    expect(text).toContain('\n\\````\n')
+    expect(parse(text)).toEqual(msgs)
+  })
+
+  test('a literal escaped fence line climbs one rung and comes back', () => {
+    const msgs = [{ role: 'user', body: '\\````\nnot a fence\n\\\\`````x' }]
+    expect(parse(stringify(msgs))).toEqual(msgs)
+  })
+
+  test('a closed zone inside one body stays verbatim', () => {
+    const body = '````\n%assistant inside\n````'
+    const text = stringify([{ role: 'user', body }])
+    expect(text).toBe('%user\n' + body + '\n')
+    expect(parse(text)[0].body).toBe(body)
   })
 })

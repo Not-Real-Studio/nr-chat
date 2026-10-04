@@ -50,6 +50,15 @@ function syntaxError(message: string, lineNumber: number): ChatSyntaxError {
 const RE_ROLE = /^[^\s]*/
 const RE_BODY_NEEDS_ESCAPE = /^\\*%/
 const RE_BODY_IS_ESCAPED = /^\\+%/
+/**
+ * Fence lines take the same ladder as `%` lines. A 4+ backtick line left outside
+ * a zone of its own body (an opener never closed there, a stray closer) is still
+ * an opener to the document-wide scan, which would pair it with a fence in a
+ * later body and swallow every marker in between. Escaping it makes the write
+ * half agree with the read half: outside a zone, `\\````…` is text, never a fence.
+ */
+const RE_FENCE_NEEDS_ESCAPE = /^\\*`{4,}[^`]*$/
+const RE_FENCE_IS_ESCAPED = /^\\+`{4,}[^`]*$/
 
 /** True for the three name escape sequences: `\{`, `\}`, `\\`. */
 function isNameEscapable(c: string | undefined): boolean {
@@ -234,14 +243,16 @@ export function escapeBody(body: string): string {
   const inZone = zoneLines(lines)
 
   return lines
-    .map(({ text }, i) => (!inZone?.[i] && RE_BODY_NEEDS_ESCAPE.test(text) ? '\\' + text : text))
+    .map(({ text }, i) =>
+      !inZone?.[i] && (RE_BODY_NEEDS_ESCAPE.test(text) || RE_FENCE_NEEDS_ESCAPE.test(text)) ? '\\' + text : text,
+    )
     .join('\n')
 }
 
 /** Remove one rung, and normalize CRLF to LF. */
 function unescapeBodyLine(line: string): string {
   const bare = line.endsWith('\r') ? line.slice(0, -1) : line
-  return RE_BODY_IS_ESCAPED.test(bare) ? bare.slice(1) : bare
+  return RE_BODY_IS_ESCAPED.test(bare) || RE_FENCE_IS_ESCAPED.test(bare) ? bare.slice(1) : bare
 }
 
 /**
